@@ -61,6 +61,7 @@
   - `docker stop container_id`：发送`SIGTERM`信号
   - `docker kill container_id`：发送`SIGKILL`信号，快速停止容器
 - 获取某个容器的详细信息：`docker inspect container_id`
+- 修改某个容器的名字：`docker rename old_name new_name`
 - 查看某个容器资源使用情况
   - `docker stats container_id`，所有指标都是相对于当前容器环境，而非主机环境
 - `top`命令：统计容器资源状态，`stats`命令统计的是CPU、内存和网络吞吐数据三项数据，而`top`统计的是容器内运行的进程信息
@@ -74,6 +75,7 @@
   - `docker rmi imge_id`：删除`image`
 - 搜索镜像：`docker search ubuntu`
 - 查看镜像详细信息：`docker inspect image`
+- 修改镜像的名称：`docker tag old_image new_image`
 - 查看镜像的构建历史：`docker history image_id`
 - `tag`命令：每个镜像都会使用ID作为唯一标识，而不一定有名称，镜像ID是Docker自行维护的，在创建镜像时自动生成，而名称则是用户自己维护
   - `docker tag IMAGE[:TAG] NAME[:TAG]`
