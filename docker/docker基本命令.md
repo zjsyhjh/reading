@@ -77,6 +77,7 @@
 - 查看镜像详细信息：`docker inspect image`
 - 修改镜像的名称：`docker tag old_image new_image`
 - 查看镜像的构建历史：`docker history image_id`
+- 将主机目录作为数据卷挂载到容器中：`docker run -it --name myubuntu -v host_dir:container_dir ubuntu:14.04 /bin/bash`
 - `tag`命令：每个镜像都会使用ID作为唯一标识，而不一定有名称，镜像ID是Docker自行维护的，在创建镜像时自动生成，而名称则是用户自己维护
   - `docker tag IMAGE[:TAG] NAME[:TAG]`
 - Docker的四种网络链接方式
