@@ -1,3 +1,7 @@
+/*
+ * 希尔排序的思想是使数组中任意间隔为h的元素都是有序的
+ * 实现希尔排序的一种方法是对于每个h，用插入排序将h个子数组独立排序
+ */
 public class Shell {
 
 	public void sort(Comparable[] a) {
@@ -31,7 +35,7 @@ public class Shell {
 		a[i] = a[j];
 		a[j] = temp;
 	}
-	
+
 	public static void main(String[] args) {
 		new Shell().sort(new Integer[]{10, 4, 5, 17, 20, 16, 18, 2, 9, 11, 8, 7, 30, 25, 28, 45, 33, 40});
 	}
