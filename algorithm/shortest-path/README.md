@@ -123,3 +123,28 @@
   }
   ```
 
+
+
+#### 任意两点最短路径问题（Floyd算法）
+
+- 只使用0-k顶点时，我们分i到i的最短路径正好经过顶点k一次和完全不经过顶点k两种情况，则可以得出
+  - 不经过顶点k的情况下，dp[k][i][j] = dp[k - 1][i][j];
+  - 经过顶点k一次的情况下，dp[k][i][j] = dp[k - 1][i][k] + dp[k - 1][k][j];
+
+- 这个可以用二维数组来简化，dp[i][j] = min(dp[i][j], dp[i][k] + dp[k][j]);
+
+  ```c++
+  int dp[MAX_V][MAX_V]; //dp[u][v]是边(u,v)的权值(若不存在，为INF，dp[i][i] = 0)
+  int V;
+
+  void floyd() {
+    for (int k = 0; k < V; k++) {
+      for (int i = 0; i < V; i++) {
+        for (int j = 0; j < V; j++) {
+          dp[i][j] = min(dp[i][j], dp[i][k] + dp[k][j]);
+        }
+      }
+    }
+  }
+  ```
+
