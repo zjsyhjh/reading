@@ -59,10 +59,10 @@
       }
       flow += f;
       cost += dist[ed] * f;
-     	for (int u = ed; u != st; u = pre[u]) {
+      for (int u = ed; u != st; u = pre[u]) {
         egdes[cur[u]].cap -= f;
         edges[cur[u] ^ 1].cap += f;
-     	}
+      }
     }
     return cost;
   }
