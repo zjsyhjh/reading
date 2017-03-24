@@ -1,6 +1,6 @@
 ## 最短路径算法总结
 
-#### 单源最短路径（Bellman-Ford算法）
+#### 单源最短路径1（Bellman-Ford算法）
 
 - 记从起点s出发到顶点i的最短距离为d[i]，则下述等式成立：
 
@@ -83,4 +83,43 @@
     ```
 
 
+
+####  单源最短路径2（Dijkstra算法）
+
+- 考虑没有负边的情况。在Bellman-Ford算法中，如果d[i]还不是最短距离，那么即使进行d[j] = d[i] + (从i到j的边的权值)的更新，d[j]也不会变成最短距离。因此可以对算法作如下修改：
+
+  - 找到最短距离已经确定的顶点，从它出发更新相邻顶点的最短距离
+  - “最短距离已经确定的顶点”就不需要再次关心了
+
+- 为了每次都找最短距离已经确定的顶点，我们使用堆来进行优化，最短距离用堆来维护，整个算法复杂度为O（|E|log|V|）
+
+  ```c++
+  struct edge {int to, cost; };
+  typedef pair<int, int> P; //first是最短距离，second是顶点编号
+
+  int V;
+  vector<edge > g[MAX_V];
+  int d[MAX_V];
+
+  void dijkstra(int s) {
+    //greater<P>参数，堆按照first大小从小到大排序
+    priority_queue<P, vector<P>, greater<P> > que;
+    fill(d, d + V, INF);
+    d[s] = 0;
+    que.push(P(0, s));
+    while (!que.empty()) {
+      P p = que.top();
+      que.pop();
+      int u = p.second;
+      if (d[u] < p.first) continue;
+      for (int i = 0; i < g[u].size(); i++) {
+        edge e = g[u][i];
+        if (d[u] + e.cost < d[e.to]) {
+          d[e.to] = d[u] + e.cost;
+          que.push(P(d[e.to], e.to));
+        }
+      }
+    }
+  }
+  ```
 
