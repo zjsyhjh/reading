@@ -16,7 +16,8 @@
 #define lson l, m, rt << 1
 #define rson m + 1, r, rt << 1 | 1
 
-__int64 sum[N << 2], add[N << 2]; //sum存储每个节点的子节点数值总和，add用来记录该节点的每个数值应该加多少
+//sum存储每个节点的子节点数值总和，add用来记录该节点的每个数值应该加多少
+__int64 sum[N << 2], add[N << 2]; 
 
 struct Node {
   int l, r; //左右区间，闭区间
@@ -32,7 +33,6 @@ void update(int l, int r, int rt, int c) {
     sum[rt] += (__int64)c * (r - l + 1);
     return;
   }
-  if (tree[rt].l == tree[rt].r) return;
   
   pushDown(rt, tree[rt].r - tree[rt].l + 1);
   
