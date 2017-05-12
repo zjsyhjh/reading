@@ -247,23 +247,28 @@
       	//遍历Onboot镜像
     	for i, image := range m.Onboot {
     		log.Infof("  Create OCI config for %s", image.Image)
+          	//转化成OCI格式的container configuration file
+          	//https://github.com/opencontainers/runtime-spec/blob/master/config.md
     		config, err := ConfigToOCI(&image)
     		if err != nil {
     			log.Fatalf("Failed to create config.json for %s: %v", image.Image, err)
     		}
     		so := fmt.Sprintf("%03d", i)
     		path := "containers/onboot/" + so + "-" + image.Name
+          	//在路径path下生成一个OCI规范的tar包，包括一个镜像以及一个json文件
     		out, err := ImageBundle(path, image.Image, config, enforceContentTrust(image.Image, &m.Trust), pull)
     		if err != nil {
     			log.Fatalf("Failed to extract root filesystem for %s: %v", image.Image, err)
     		}
     		buffer := bytes.NewBuffer(out)
+          	//追加到最终的输出镜像上
     		initrdAppend(iw, buffer)
     	}
 
     	if len(m.Services) != 0 {
     		log.Infof("Add service containers:")
     	}
+      	//和Onboot类似
     	for _, image := range m.Services {
     		log.Infof("  Create OCI config for %s", image.Image)
     		config, err := ConfigToOCI(&image)
@@ -280,6 +285,7 @@
     	}
 
     	// add files
+      	// 添加yml中指定的文件以及其内容
     	buffer, err := filesystem(m)
     	if err != nil {
     		log.Fatalf("failed to add filesystem parts: %v", err)
@@ -294,3 +300,127 @@
     }
     ```
 
+- 了解了`buildInternal(m *Moby, name string, pull bool)`函数的大致流程，来看一下其中某些过程的细节，下面对`ImageExtract(image, prefix string, trust bool, pull bool`函数进行分析，该函数的实现位于`image.go`，其主要功能就是从镜像中提取文件并重新打包
+
+  - ```go
+    // ImageExtract extracts the filesystem from an image and returns a tarball with the files prefixed by the given path
+    func ImageExtract(image, prefix string, trust bool, pull bool) ([]byte, error) {
+    	log.Debugf("image extract: %s %s", image, prefix)
+    	out := new(bytes.Buffer)
+    	tw := tar.NewWriter(out)
+      	// tarPrefix creates the leading directories for a path
+      	// 传入的path必须是相对路径,比如说../a/b/c/，则必须先创建目录a，目录b以及目录c，写入tar包
+    	err := tarPrefix(prefix, tw)
+    	if err != nil {
+    		return []byte{}, err
+    	}
+      	//imageTar的主要作用是对镜像进行打包，不过需要删除和增加一些文件在tar包中
+    	err = imageTar(image, prefix, tw, trust, pull)
+    	if err != nil {
+    		return []byte{}, err
+    	}
+    	err = tw.Close()
+    	if err != nil {
+    		return []byte{}, err
+    	}
+      	//返回tar包字节数组
+    	return out.Bytes(), nil
+    ```
+
+- 下面对`ImageExtract`函数中`imageTar(image, prefix string, tw *tar.Writer, trust bool, pull bool)`函数进行分析，该函数主要功能就是对镜像文件镜像打包，并且在打包过程中需要删除和增加一些文件
+
+  - ```go
+    func imageTar(image, prefix string, tw *tar.Writer, trust bool, pull bool) error {
+    	log.Debugf("image tar: %s %s", image, prefix)
+    	if prefix != "" && prefix[len(prefix)-1] != byte('/') {
+    		return fmt.Errorf("prefix does not end with /: %s", prefix)
+    	}
+
+    	if pull || trust {
+    		log.Infof("Pull image: %s", image)
+    		err := dockerPull(image, trust)
+    		if err != nil {
+    			return fmt.Errorf("Could not pull image %s: %v", image, err)
+    		}
+    	}
+    	container, err := dockerCreate(image)
+    	if err != nil {
+    		// if the image wasn't found, pull it down.  Bail on other errors.
+    		if client.IsErrNotFound(err) {
+    			log.Infof("Pull image: %s", image)
+    			err := dockerPull(image, trust)
+    			if err != nil {
+    				return fmt.Errorf("Could not pull image %s: %v", image, err)
+    			}
+    			container, err = dockerCreate(image)
+    			if err != nil {
+    				return fmt.Errorf("Failed to docker create image %s: %v", image, err)
+    			}
+    		} else {
+    			return fmt.Errorf("Failed to create docker image %s: %v", image, err)
+    		}
+    	}
+    	contents, err := dockerExport(container)
+    	if err != nil {
+    		return fmt.Errorf("Failed to docker export container from container %s: %v", container, err)
+    	}
+    	err = dockerRm(container)
+    	if err != nil {
+    		return fmt.Errorf("Failed to docker rm container %s: %v", container, err)
+    	}
+
+    	// now we need to filter out some files from the resulting tar archive
+
+    	r := bytes.NewReader(contents)
+    	tr := tar.NewReader(r)
+
+    	for {
+    		hdr, err := tr.Next()
+    		if err == io.EOF {
+    			break
+    		}
+    		if err != nil {
+    			return err
+    		}
+    		if exclude[hdr.Name] {
+    			log.Debugf("image tar: %s %s exclude %s", image, prefix, hdr.Name)
+    			_, err = io.Copy(ioutil.Discard, tr)
+    			if err != nil {
+    				return err
+    			}
+    		} else if replace[hdr.Name] != "" {
+    			contents := replace[hdr.Name]
+    			hdr.Size = int64(len(contents))
+    			hdr.Name = prefix + hdr.Name
+    			log.Debugf("image tar: %s %s add %s", image, prefix, hdr.Name)
+    			if err := tw.WriteHeader(hdr); err != nil {
+    				return err
+    			}
+    			buf := bytes.NewBufferString(contents)
+    			_, err = io.Copy(tw, buf)
+    			if err != nil {
+    				return err
+    			}
+    			_, err = io.Copy(ioutil.Discard, tr)
+    			if err != nil {
+    				return err
+    			}
+    		} else {
+    			log.Debugf("image tar: %s %s add %s", image, prefix, hdr.Name)
+    			hdr.Name = prefix + hdr.Name
+    			if err := tw.WriteHeader(hdr); err != nil {
+    				return err
+    			}
+    			_, err = io.Copy(tw, tr)
+    			if err != nil {
+    				return err
+    			}
+    		}
+    	}
+    	err = tw.Close()
+    	if err != nil {
+    		return err
+    	}
+    	return nil
+    }
+    ```
