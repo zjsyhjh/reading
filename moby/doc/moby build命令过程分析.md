@@ -582,4 +582,131 @@
     }
     ```
 
-- ​
+- 由于Onboot以及Services的镜像都需要转化为OCI格式，并由runc来执行，因此不同于Init部分镜像的处理，通过`ConfigToOCI(image *MobyImage)`将镜像转化为OCI格式，然后通过`ImageBundle(path string, image string, config []byte, trust bool, pull bool)`函数在指定路径`path`下处理OCI格式的`rootfs`tar包以及`config.json`tar包，`ImageBundle`的实现位于`image.go`
+
+  - ```go
+    // ImageBundle produces an OCI bundle at the given path in a tarball, given an image and a config.json
+    func ImageBundle(path string, image string, config []byte, trust bool, pull bool) ([]byte, error) {
+    	log.Debugf("image bundle: %s %s cfg: %s", path, image, string(config))
+    	out := new(bytes.Buffer)
+    	tw := tar.NewWriter(out)
+      	// tarPrefix creates the leading directories for a path
+      	//将path对应的目录写到tw对应的缓冲区中
+    	err := tarPrefix(path+"/rootfs/", tw)
+    	if err != nil {
+    		return []byte{}, err
+    	}
+      	//将config.json写到tw对应的缓冲区中
+    	hdr := &tar.Header{
+    		Name: path + "/" + "config.json",
+    		Mode: 0644,
+    		Size: int64(len(config)),
+    	}
+    	err = tw.WriteHeader(hdr)
+    	if err != nil {
+    		return []byte{}, err
+    	}
+    	buf := bytes.NewBuffer(config)
+      	//写config文件到tw中
+    	_, err = io.Copy(tw, buf)
+    	if err != nil {
+    		return []byte{}, err
+    	}
+      	//将rootfs下的image镜像tar包写入到tw对应的缓冲区
+    	err = imageTar(image, path+"/rootfs/", tw, trust, pull)
+    	if err != nil {
+    		return []byte{}, err
+    	}
+    	err = tw.Close()
+    	if err != nil {
+    		return []byte{}, err
+    	}
+    	return out.Bytes(), nil
+    }
+    ```
+
+- 最后来看一下`outputs(m *Moby, base string, image []byte)`函数，其主要作用就是把缓冲区image的内容生成最终要求的格式的镜像，其实现位于`output.go`文件
+
+  - ```go
+    func outputs(m *Moby, base string, image []byte) error {
+    	log.Debugf("output: %s %s", m.Outputs, base)
+
+    	for _, o := range m.Outputs {
+    		switch o.Format {
+    		case "tar":
+    			err := outputTar(base, image)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "kernel+initrd":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputKernelInitrd(base, kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "iso-bios":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputISO(bios, base+".iso", kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "iso-efi":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputISO(efi, base+"-efi.iso", kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "gcp-img":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputImg(gcp, base+".img.tar.gz", kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "qcow", "qcow2":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputImg(qcow, base+".qcow2", kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "vhd":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputImg(vhd, base+".vhd", kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "vmdk":
+    			kernel, initrd, cmdline, err := tarToInitrd(image)
+    			if err != nil {
+    				return fmt.Errorf("Error converting to initrd: %v", err)
+    			}
+    			err = outputImg(vmdk, base+".vmdk", kernel, initrd, cmdline)
+    			if err != nil {
+    				return fmt.Errorf("Error writing %s output: %v", o.Format, err)
+    			}
+    		case "":
+    			return fmt.Errorf("No format specified for output")
+    		default:
+    			return fmt.Errorf("Unknown output type %s", o.Format)
+    		}
+    	}
+    	return nil
+    }
+    ```
