@@ -330,12 +330,41 @@
 - 下面对`ImageExtract`函数中`imageTar(image, prefix string, tw *tar.Writer, trust bool, pull bool)`函数进行分析，该函数主要功能就是对镜像文件镜像打包，并且在打包过程中需要删除和增加一些文件
 
   - ```go
+    // This uses Docker to convert a Docker image into a tarball. It would be an improvement if we
+    // used the containerd libraries to do this instead locally direct from a local image
+    // cache as it would be much simpler.
+
+    //tar包中需要被剔除的文件
+    var exclude = map[string]bool{
+    	".dockerenv":  true,
+    	"Dockerfile":  true,
+    	"dev/console": true,
+    	"dev/pts":     true,
+    	"dev/shm":     true,
+    }
+    //tar包中需要增加的文件内容
+    var replace = map[string]string{
+    	"etc/hosts": `127.0.0.1       localhost
+    ::1     localhost ip6-localhost ip6-loopback
+    fe00::0 ip6-localnet
+    ff00::0 ip6-mcastprefix
+    ff02::1 ip6-allnodes
+    ff02::2 ip6-allrouters
+    `,
+    	"etc/resolv.conf": `nameserver 8.8.8.8
+    nameserver 8.8.4.4
+    nameserver 2001:4860:4860::8888
+    nameserver 2001:4860:4860::8844
+    `,
+    	"etc/hostname": "moby",
+    }
+
     func imageTar(image, prefix string, tw *tar.Writer, trust bool, pull bool) error {
     	log.Debugf("image tar: %s %s", image, prefix)
     	if prefix != "" && prefix[len(prefix)-1] != byte('/') {
     		return fmt.Errorf("prefix does not end with /: %s", prefix)
     	}
-
+    	//如果需要pull或者是在trust列表中，则从dockerhub上将镜像pull下来
     	if pull || trust {
     		log.Infof("Pull image: %s", image)
     		err := dockerPull(image, trust)
@@ -343,11 +372,14 @@
     			return fmt.Errorf("Could not pull image %s: %v", image, err)
     		}
     	}
+      	//创建使用该镜像的容器
     	container, err := dockerCreate(image)
     	if err != nil {
     		// if the image wasn't found, pull it down.  Bail on other errors.
+          	// 镜像没找到
     		if client.IsErrNotFound(err) {
     			log.Infof("Pull image: %s", image)
+              	//再次从dockerhub上pull
     			err := dockerPull(image, trust)
     			if err != nil {
     				return fmt.Errorf("Could not pull image %s: %v", image, err)
@@ -360,21 +392,24 @@
     			return fmt.Errorf("Failed to create docker image %s: %v", image, err)
     		}
     	}
+      	//将镜像内容导出到contents字节数组中
     	contents, err := dockerExport(container)
     	if err != nil {
     		return fmt.Errorf("Failed to docker export container from container %s: %v", container, err)
     	}
+      	//删除这个临时的container
     	err = dockerRm(container)
     	if err != nil {
     		return fmt.Errorf("Failed to docker rm container %s: %v", container, err)
     	}
 
     	// now we need to filter out some files from the resulting tar archive
-
+    	// 需要过滤镜像的一些内容以及增加一些文件
     	r := bytes.NewReader(contents)
     	tr := tar.NewReader(r)
 
     	for {
+          	//每个文件头
     		hdr, err := tr.Next()
     		if err == io.EOF {
     			break
@@ -382,6 +417,7 @@
     		if err != nil {
     			return err
     		}
+          	//包含某个文件名的需要从tar包中被剔除
     		if exclude[hdr.Name] {
     			log.Debugf("image tar: %s %s exclude %s", image, prefix, hdr.Name)
     			_, err = io.Copy(ioutil.Discard, tr)
@@ -389,14 +425,17 @@
     				return err
     			}
     		} else if replace[hdr.Name] != "" {
+              	//tar包中需要进行增加的文件
     			contents := replace[hdr.Name]
     			hdr.Size = int64(len(contents))
     			hdr.Name = prefix + hdr.Name
     			log.Debugf("image tar: %s %s add %s", image, prefix, hdr.Name)
+              	//写文件头内容到tw对应的缓冲区中
     			if err := tw.WriteHeader(hdr); err != nil {
     				return err
     			}
     			buf := bytes.NewBufferString(contents)
+              	//写到tw对应的缓冲区中
     			_, err = io.Copy(tw, buf)
     			if err != nil {
     				return err
@@ -406,6 +445,7 @@
     				return err
     			}
     		} else {
+              	//复制tar中既不需要删除也不需要增加的文件到tw对应的缓冲区中
     			log.Debugf("image tar: %s %s add %s", image, prefix, hdr.Name)
     			hdr.Name = prefix + hdr.Name
     			if err := tw.WriteHeader(hdr); err != nil {
@@ -424,3 +464,122 @@
     	return nil
     }
     ```
+
+- 接下来对`buildInternal`函数中的`untarKernel(buf *bytes.Buffer, kernelName, kernelAltName, ktarName string, cmdline string) `函数进行分析，该函数的主要功能是将buf缓冲区的文件分别提取到名为`kernel(bzImage)`和`kernel.tar`的缓冲区，该函数的实现位于`build.go`文件中，下面来看具体的实现细节
+
+  - ```go
+    func untarKernel(buf *bytes.Buffer, kernelName, kernelAltName, ktarName string, cmdline string) (*bytes.Buffer, *bytes.Buffer, error) {
+    	tr := tar.NewReader(buf)
+
+    	var kernel, ktar *bytes.Buffer
+    	foundKernel := false
+
+    	for {
+          	//读取文件头
+    		hdr, err := tr.Next()
+    		if err == io.EOF {
+    			break
+    		}
+    		if err != nil {
+    			log.Fatalln(err)
+    		}
+    		switch hdr.Name {
+            //如果文件名为kernel或者bzImage
+    		case kernelName, kernelAltName:
+    			if foundKernel {
+    				return nil, nil, errors.New("found more than one possible kernel image")
+    			}
+    			foundKernel = true
+    			kernel = new(bytes.Buffer)
+    			// make a new tarball with kernel in /boot/kernel
+              	// 在/boot目录下创建kernel的tar包
+              	// 首先创建boot目录
+    			tw := tar.NewWriter(kernel)
+    			whdr := &tar.Header{
+    				Name:     "boot",
+    				Mode:     0700,
+    				Typeflag: tar.TypeDir,
+    			}
+    			if err := tw.WriteHeader(whdr); err != nil {
+    				return nil, nil, err
+    			}
+              	//在boot目录下，再创建kernel文件
+    			whdr = &tar.Header{
+    				Name: "boot/kernel",
+    				Mode: hdr.Mode,
+    				Size: hdr.Size,
+    			}
+    			if err := tw.WriteHeader(whdr); err != nil {
+    				return nil, nil, err
+    			}
+    			_, err = io.Copy(tw, tr)
+    			if err != nil {
+    				return nil, nil, err
+    			}
+    			// add the cmdline in /boot/cmdline
+              	//将文件cmdline内容添加到/boot/cmdline中
+    			whdr = &tar.Header{
+    				Name: "boot/cmdline",
+    				Mode: 0700,
+    				Size: int64(len(cmdline)),
+    			}
+    			if err := tw.WriteHeader(whdr); err != nil {
+    				return nil, nil, err
+    			}
+    			buf := bytes.NewBufferString(cmdline)
+    			_, err = io.Copy(tw, buf)
+    			if err != nil {
+    				return nil, nil, err
+    			}
+    			if err := tw.Close(); err != nil {
+    				return nil, nil, err
+    			}
+    		case ktarName:
+              	//如果文件名为kernel.tar
+    			ktar = new(bytes.Buffer)
+    			_, err := io.Copy(ktar, tr)
+    			if err != nil {
+    				return nil, nil, err
+    			}
+    		default:
+    			continue
+    		}
+    	}
+
+    	if kernel == nil {
+    		return nil, nil, errors.New("did not find kernel in kernel image")
+    	}
+    	if ktar == nil {
+    		return nil, nil, errors.New("did not find kernel.tar in kernel image")
+    	}
+
+    	return kernel, ktar, nil
+    }
+    ```
+
+- 将tar包内容读取到相应的缓冲区之后，在将该缓冲区的内容追加到最终输出镜像的缓冲区，`initrdAppend(iw *tar.Writer, r io.Reader)`正干了这件事
+
+  - ```go
+    func initrdAppend(iw *tar.Writer, r io.Reader) {
+    	tr := tar.NewReader(r)
+    	for {
+    		hdr, err := tr.Next()
+    		if err == io.EOF {
+    			break
+    		}
+    		if err != nil {
+    			log.Fatalln(err)
+    		}
+    		err = iw.WriteHeader(hdr)
+    		if err != nil {
+    			log.Fatalln(err)
+    		}
+    		_, err = io.Copy(iw, tr)
+    		if err != nil {
+    			log.Fatalln(err)
+    		}
+    	}
+    }
+    ```
+
+- ​
