@@ -163,14 +163,40 @@
 - 回到`build.go`文件的`build(args []string)`函数，当调用`NewConfig(config)`函数完成对`yml`配置文件的内容解析之后，通过`buildInternal(m *Moby, name string, pull bool) []byte`函数来进行镜像的构建，该函数也位于`build.go`文件中，下面对该函数进行分析
 
   - ```go
+    func enforceContentTrust(fullImageName string, config *TrustConfig) bool {
+    	for _, img := range config.Image {
+    		// First check for an exact name match
+    		if img == fullImageName {
+    			return true
+    		}
+    		// Also check for an image name only match
+    		// by removing a possible tag (with possibly added digest):
+    		if img == strings.TrimSuffix(fullImageName, ":") {
+    			return true
+    		}
+    		// and by removing a possible digest:
+    		if img == strings.TrimSuffix(fullImageName, "@sha256:") {
+    			return true
+    		}
+    	}
+
+    	for _, org := range config.Org {
+    		if strings.HasPrefix(fullImageName, org+"/") {
+    			return true
+    		}
+    	}
+    	return false
+    }
+
     // Perform the actual build process
     // TODO return error not panic
     func buildInternal(m *Moby, name string, pull bool) []byte {
     	w := new(bytes.Buffer)
     	iw := tar.NewWriter(w)
-
+    	//如果需要pull镜像(默认是false)或者说kernel镜像名是在yml文件的trust列表中，则pull对应的kernel镜像
     	if pull || enforceContentTrust(m.Kernel.Image, &m.Trust) {
     		log.Infof("Pull kernel image: %s", m.Kernel.Image)
+          	//dockerPull将对应的镜像从dockerhub上pull下来
     		err := dockerPull(m.Kernel.Image, enforceContentTrust(m.Kernel.Image, &m.Trust))
     		if err != nil {
     			log.Fatalf("Could not pull image %s: %v", m.Kernel.Image, err)
@@ -184,16 +210,18 @@
     			kernelAltName = "bzImage"
     			ktarName      = "kernel.tar"
     		)
+          //提取kernel镜像中的文件(要忽略掉一些文件，添加一些文件)并打包(不压缩), 该tar包含kernel(bzImage)，kernel.tar等文件
     		out, err := ImageExtract(m.Kernel.Image, "", enforceContentTrust(m.Kernel.Image, &m.Trust), pull)
     		if err != nil {
     			log.Fatalf("Failed to extract kernel image and tarball: %v", err)
     		}
     		buf := bytes.NewBuffer(out)
-
+    		//提取tar包中的kernel(bzImage)，kernel.tar等文件内容并写入到名为kernel, ktar的缓冲区
     		kernel, ktar, err := untarKernel(buf, kernelName, kernelAltName, ktarName, m.Kernel.Cmdline)
     		if err != nil {
     			log.Fatalf("Could not extract kernel image and filesystem from tarball. %v", err)
     		}
+          	//将kernel以及tar的缓冲区内容追加写到名为w的缓冲区
     		initrdAppend(iw, kernel)
     		initrdAppend(iw, ktar)
     	}
@@ -202,6 +230,7 @@
     	if len(m.Init) != 0 {
     		log.Infof("Add init containers:")
     	}
+      	//将init镜像内容提取到名为init的缓冲区，然后也是追加写到名为w的缓冲区
     	for _, ii := range m.Init {
     		log.Infof("Process init image: %s", ii)
     		init, err := ImageExtract(ii, "", enforceContentTrust(ii, &m.Trust), pull)
@@ -215,6 +244,7 @@
     	if len(m.Onboot) != 0 {
     		log.Infof("Add onboot containers:")
     	}
+      	//遍历Onboot镜像
     	for i, image := range m.Onboot {
     		log.Infof("  Create OCI config for %s", image.Image)
     		config, err := ConfigToOCI(&image)
