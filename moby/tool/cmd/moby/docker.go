@@ -20,89 +20,91 @@ import (
 	"golang.org/x/net/context"
 )
 
-func dockerRunInput(input io.Reader, image string, args ...string) ([]byte, error) {
-	log.Debugf("docker run (input): %s %s", image, strings.Join(args, " "))
-
-	cli, err := dockerClient()
+func dockerRun(args ...string) ([]byte, error) {
+	log.Debugf("docker run: %s", strings.Join(args, " "))
+	docker, err := exec.LookPath("docker")
 	if err != nil {
-		return []byte{}, errors.New("could not initialize Docker API client")
+		return []byte{}, errors.New("Docker does not seem to be installed")
 	}
+	args = append([]string{"run", "--rm", "--log-driver=none"}, args...)
+	cmd := exec.Command(docker, args...)
 
-	origStdin := os.Stdin
-	defer func() {
-		os.Stdin = origStdin
-	}()
-
-	// write input to a file
-	rawInput, err := ioutil.ReadAll(input)
-	if err != nil {
-		return []byte{}, errors.New("could not read input")
-	}
-	tmpInputFileName := "tmpInput"
-	if err := ioutil.WriteFile(tmpInputFileName, rawInput, 0644); err != nil {
-		return []byte{}, errors.New("could not stage input to file")
-	}
-	inputFile, err := os.Open(tmpInputFileName)
-	if err != nil {
-		return []byte{}, errors.New("could not open input file for container stdin")
-	}
-	defer os.Remove(tmpInputFileName)
-
-	os.Stdin = inputFile
-
-	var resp container.ContainerCreateCreatedBody
-	resp, err = cli.ContainerCreate(context.Background(), &container.Config{
-		Image:        image,
-		Cmd:          args,
-		AttachStdout: true,
-		AttachStdin:  true,
-	}, &container.HostConfig{
-		AutoRemove: true,
-		LogConfig:  container.LogConfig{Type: "none"},
-	}, nil, "")
-	if err != nil {
-		// if the image wasn't found, try to do a pull and another create
-		if client.IsErrNotFound(err) {
-			if err := dockerPull(image, false); err != nil {
-				return []byte{}, err
-			}
-			resp, err = cli.ContainerCreate(context.Background(), &container.Config{
-				Image:        image,
-				Cmd:          args,
-				AttachStdout: true,
-				AttachStdin:  true,
-			}, &container.HostConfig{
-				AutoRemove: true,
-				LogConfig:  container.LogConfig{Type: "none"},
-			}, nil, "")
-			// if we error again, bail
-			if err != nil {
-				return []byte{}, err
-			}
-		}
-		return []byte{}, err
-	}
-
-	hijackedResp, err := cli.ContainerAttach(context.Background(), resp.ID, types.ContainerAttachOptions{
-		Stdout: true,
-		Stdin:  true,
-		Stream: true,
-	})
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return []byte{}, err
 	}
 
-	if err := cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
 		return []byte{}, err
 	}
 
-	if _, err = cli.ContainerWait(context.Background(), resp.ID); err != nil {
+	err = cmd.Start()
+	if err != nil {
 		return []byte{}, err
 	}
 
-	out, _ := ioutil.ReadAll(hijackedResp.Reader)
+	stdout, err := ioutil.ReadAll(stdoutPipe)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	stderr, err := ioutil.ReadAll(stderrPipe)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return []byte{}, fmt.Errorf("%v: %s", err, stderr)
+	}
+
+	log.Debugf("docker run: %s...Done", strings.Join(args, " "))
+	return stdout, nil
+}
+
+func dockerRunInput(input io.Reader, args ...string) ([]byte, error) {
+	log.Debugf("docker run (input): %s", strings.Join(args, " "))
+	docker, err := exec.LookPath("docker")
+	if err != nil {
+		return []byte{}, errors.New("Docker does not seem to be installed")
+	}
+	args = append([]string{"run", "--rm", "-i"}, args...)
+	cmd := exec.Command(docker, args...)
+	cmd.Stdin = input
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	stdout, err := ioutil.ReadAll(stdoutPipe)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	stderr, err := ioutil.ReadAll(stderrPipe)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return []byte{}, fmt.Errorf("%v: %s", err, stderr)
+	}
+
 	log.Debugf("docker run (input): %s...Done", strings.Join(args, " "))
-	return out, nil
+	return stdout, nil
 }
 
 func dockerCreate(image string) (string, error) {
@@ -161,48 +163,28 @@ func dockerRm(container string) error {
 
 func dockerPull(image string, trustedPull bool) error {
 	log.Debugf("docker pull: %s", image)
-	docker, err := exec.LookPath("docker")
-	if err != nil {
-		return errors.New("Docker does not seem to be installed")
-	}
-	var args = []string{"pull"}
 	if trustedPull {
 		log.Debugf("pulling %s with content trust", image)
-		args = append(args, "--disable-content-trust=false")
+		trustedImg, err := TrustedReference(image)
+		if err != nil {
+			return fmt.Errorf("Trusted pull for %s failed: %v", image, err)
+		}
+		image = trustedImg.String()
 	}
-	args = append(args, image)
-	cmd := exec.Command(docker, args...)
+	cli, err := dockerClient()
+	if err != nil {
+		return errors.New("could not initialize Docker API client")
+	}
 
-	stderrPipe, err := cmd.StderrPipe()
+	r, err := cli.ImagePull(context.Background(), image, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
-
-	stdoutPipe, err := cmd.StdoutPipe()
+	defer r.Close()
+	_, err = io.Copy(ioutil.Discard, r)
 	if err != nil {
 		return err
 	}
-
-	err = cmd.Start()
-	if err != nil {
-		return err
-	}
-
-	_, err = ioutil.ReadAll(stdoutPipe)
-	if err != nil {
-		return err
-	}
-
-	stderr, err := ioutil.ReadAll(stderrPipe)
-	if err != nil {
-		return err
-	}
-
-	err = cmd.Wait()
-	if err != nil {
-		return fmt.Errorf("%v: %s", err, stderr)
-	}
-
 	log.Debugf("docker pull: %s...Done", image)
 	return nil
 }
