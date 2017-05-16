@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/client"
 )
 
 // This uses Docker to convert a Docker image into a tarball. It would be an improvement if we
@@ -103,7 +104,7 @@ func imageTar(image, prefix string, tw *tar.Writer, trust bool, pull bool) error
 	container, err := dockerCreate(image)
 	if err != nil {
 		// if the image wasn't found, pull it down.  Bail on other errors.
-		if strings.Contains(err.Error(), "No such image") {
+		if client.IsErrNotFound(err) {
 			log.Infof("Pull image: %s", image)
 			err := dockerPull(image, trust)
 			if err != nil {
