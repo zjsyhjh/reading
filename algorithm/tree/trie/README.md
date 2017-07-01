@@ -6,7 +6,7 @@
 
 - 思路：以词典中单词为输入建立字典树，插入的时候，每个节点记录一下即可
 
-- ```c++
+```c++
   #include <iostream>
   #include <cstdio>
   #include <cstring>
@@ -64,4 +64,4 @@
           }
       }
   }
-  ```
+```
