@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
 	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {
 		error_handler("connect() error");
 	}
-	printf("connected...");
+	printf("connected...\n");
 
 	while (1) {
 		fputs("Input message(Q to quit): ", stdout);
