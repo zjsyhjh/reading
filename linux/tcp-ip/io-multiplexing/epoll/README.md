@@ -83,3 +83,34 @@ struct epoll_event *ep_events;
 ep_events = malloc(sizeof(struct epoll_event) * EPOLL_SIZE); //EPOLL_SIZE是宏常量
 event_cnt = epoll_wait(epfd, ep_events, EPOLL_SIZE, -1);
 ```
+####  水平或条件触发（Level Trigger）和边缘触发（Edge Trigger）
+
+条件触发和边缘触发的区别在于发生事件的时间点（epoll默认以条件触发方式工作）
+
+- 条件触发方式中，只要输入缓冲有数据，就会以事件方式不断注册
+- 边缘触发方式中，输入缓冲收到数据时仅注册1次该事件。即使输入缓冲中还留有数据，也不会再进行注册
+
+边缘触发的服务器端实现中必知的两点
+
+- 通过`errno`变量验证错误原因
+- 为了完成非阻塞（`Non-blocking`）I/O，更改套接字特性
+
+```c
+#include <fcntl.h>
+
+/*
+ * 成功时返回cmd参数相关值，失败时返回-1
+ * filedes - 属性更改目标的文件描述符 
+ * cmd - 表示函数调用的目的
+ */
+int fcntl(int filedes, int cmd, ...);
+/* 
+ * 示例：将文件（套接字）改为非阻塞模式
+ * 通过第一条语句获取之前设置的属性信息
+ * 通过第二条语句在此基础上添加非阻塞O_NONBLOCK标志
+ * 调用read & write函数时，无论是否存在数据，都会形成非阻塞文件（或套接字）
+ */
+int flag = fcntl(fd, F_GETFL, 0);
+fcntl(fd, F_SETFL, flag|O_NONBLOCK);
+```
+
