@@ -29,8 +29,9 @@ int parse_uri(char *uri, char *filename, char *cgiargs) {
 			*ptr = '\0';
 		} else {
 			strcpy(cgiargs, "");
-			strcat(filename, uri);
 		}
+		strcpy(filename, ".");
+		strcat(filename, uri);
 		return 0;
 	}
 }
