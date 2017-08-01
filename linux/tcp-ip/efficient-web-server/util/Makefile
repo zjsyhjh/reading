@@ -1,10 +1,15 @@
 CC = gcc
 CFLAGS = -O2 -Wall -I.
 
-all: zero_epoll.o
+OBJS = zero_list.o zero_priority_queue.o
 
-zero_epoll.o: zero_epoll.c
-	$(CC) $(CFLAGS) -c zero_epoll.c
+all: $(OBJS)
+
+zero_list.o: zero_list.c
+	$(CC) $(CFLAGS) -c zero_list.c
+
+zero_priority_queue.o: zero_priority_queue.c
+	$(CC) $(CFLAGS) -c zero_priority_queue.c
 
 clean:
 	rm -f *.o
