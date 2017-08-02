@@ -2,6 +2,7 @@
 #define __ZERO_LIST_H__
 
 #include <assert.h>
+#include <stdbool.h>
 
 struct list_head {
 	struct list_head *prev, *next;
