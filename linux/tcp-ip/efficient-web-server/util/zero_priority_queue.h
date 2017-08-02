@@ -56,6 +56,28 @@ static void sink(struct zero_pq_t *zero_pq, size_t k) {
 }
 
 
+void zero_pq_init(struct zero_pq_t *zero_pq, zero_pq_cmp_ptr cmp) {
+	zero_pq->pq_ptr = (void **) malloc(sizeof(void *) * PQ_DEFAULT_CAPACITY);
+	assert(zero_pq->pq_ptr != NULL);
+
+	zero_pq->size = 0;
+	zero_pq->capacity = PQ_DEFAULT_CAPACITY;
+	zero_pq->cmp = cmp;
+}
+
+
+void zero_pq_init_capacity(struct zero_pq_t *zero_pq, zero_pq_cmp_ptr cmp, size_t capacity) {
+	size_t cap = 1;
+	while (cap < capacity) cap <<= 1;
+
+	zero_pq->pq_ptr = (void **)malloc(sizeof(void *) * PQ_DEFAULT_CAPACITY);
+	assert(zero_pq->pq_ptr != NULL);
+
+	zero_pq->size = 0;
+	zero_pq->capacity = cap + 1;
+	zero_pq->cmp = cmp;
+}
+
 void zero_pq_insert(struct zero_pq_t *zero_pq, void *item) {
 	if (zero_pq->size + 1 == zero_pq->capacity) {
 		resize(zero_pq, ((zero_pq->capacity - 1) << 1) + 1); 
