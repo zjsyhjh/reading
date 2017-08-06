@@ -7,7 +7,7 @@ struct zero_task_t {
 	void *args;
 };
 
-void task_init(void (*func)(void *), void *args);
+struct zero_task_t *task_init(void (*func)(void *), void *args);
 
 #endif
 /* $end zero_task.h */
