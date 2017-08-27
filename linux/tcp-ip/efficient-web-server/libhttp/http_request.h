@@ -1,7 +1,38 @@
 #ifndef __HTTP_REQUEST_H__
 #define __HTTP_REQUEST_H__
 
+#define MAX_BUF 8124
+
+#define ZERO_HTTP_REQUEST_INVALID_METHOD 0
+#define ZERO_HTTP_REQUEST_INVALID_REQUEST 1
+#define ZERO_HTTP_REQUEST_INVALID_HEADER 2
+
+#define ZERO_HTTP_METHOD_UNKNOWN 0x0001
+#define ZERO_HTTP_METHOD_GET  0x0002
+#define ZERO_HTTP_METHOD_HEAD 0x0004
+#define ZERO_HTTP_METHOD_POST 0x0008
+
+#define ZERO_HTTP_AGAIN EAGAIN
+#define ZERO_HTTP_OK 1
+
+
 struct zero_http_request_t {
+    int index, start, end;
+    char ring_buf[MAX_BUF];
+    /* GET, HEAD, POST */
+    void *request_start;
+    void *method_end;
+    int method; 
+
+    void *uri_start; 
+    void *uri_end;
+
+
+    int http_major;
+    int http_minor;
+
+    void *request_end;
     struct zero_timer_node *timer_node; 
+    
 };
 #endif
