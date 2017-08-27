@@ -2,6 +2,6 @@
 #define __HTTP_REQUEST_H__
 
 struct zero_http_request_t {
-    
+    struct zero_timer_node *timer_node; 
 };
 #endif
