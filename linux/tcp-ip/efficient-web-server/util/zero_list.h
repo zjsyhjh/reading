@@ -51,10 +51,26 @@ static inline void list_del(struct list_head *head, struct list_head *entry) {
 }
 
 
-
 static inline bool list_empty(struct list_head *head) {
 	return (head->next == head) && (head->prev == head);
 }
+
+
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+
+#define container_of(ptr, type, member) ({                      \
+        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+        (type *)( (char *)__mptr - offsetof(type,member) );     \
+})
+
+#define list_entry(ptr, type, member) \
+	container_of(ptr, type, member)
+
+#define list_for_each(pos, head) \
+	for (pos = (head)->next; pos != (head); pos = pos->next)
+
+#define list_for_each_prev(pos, head) \
+    for (pos = (head)->prev; pos != (head); pos = pos->prev)
 
 
 
