@@ -32,26 +32,26 @@ struct zero_http_header_t {
  * 请求行，包含起始行以及首部
  */
 struct zero_http_request_t {
+    int fd;
+    int epfd;
+    void *root;
     int index, start, end;
     char ring_buf[MAX_BUF];
-    /* GET, HEAD, POST */
+    /* first line */
     void *request_start;
     void *method_end;
-    int method; 
-
+    int method;    /* GET, HEAD, POST */
     void *uri_start; 
     void *uri_end;
-
-
     int http_major;
     int http_minor;
-
     void *request_end;
+    /* header */
     struct list_head list;
     struct zero_http_header_t *header;
-    struct zero_timer_node *timer_node;
-    
+    struct zero_timer_node *timer_node; 
 };
+
 
 
 #endif
