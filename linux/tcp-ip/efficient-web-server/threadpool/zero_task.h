@@ -5,6 +5,7 @@
 struct zero_task_t {
 	void (*func)(void *);
 	void *args;
+	zero_task_t *next_task;
 };
 
 struct zero_task_t *task_init(void (*func)(void *), void *args);
