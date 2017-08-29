@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <assert.h>
+
 #include "zero_task.h"
+#include "../base/zero_debug.h"
 
 struct zero_task_t *task_init(void (*func)(void *), void *args)
 {

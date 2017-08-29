@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 
 #include "zero_socket.h"
-#include "../debug/debug.h"
+#include "../base/zero_debug.h"
 
 /**************************** 
  * Sockets interface wrappers
