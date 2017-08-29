@@ -1,8 +1,9 @@
+#include <sys/epoll.h>
 #include "http.h"
 #include "http_parse.h"
 #include "http_request.h"
 
-mime_type_t zero_mime[] = 
+struct mime_type_t zero_mime[] = 
 {
     {".html", "text/html"},
     {".xml", "text/xml"},
@@ -29,7 +30,7 @@ static char *ROOT = NULL;
 
 void do_request(void *ptr) 
 {
-    zero_http_request_t *r = (zero_http_request_t *)ptr;
+    struct zero_http_request_t *r = (struct zero_http_request_t *)ptr;
     int fd = r->fd;
     int rc, n, remain_size;
     char filename[FILESIZE];

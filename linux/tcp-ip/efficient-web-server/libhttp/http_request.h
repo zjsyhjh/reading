@@ -1,6 +1,8 @@
 #ifndef __HTTP_REQUEST_H__
 #define __HTTP_REQUEST_H__
 
+#include <time.h>
+#include <errno.h>
 #include "../util/zero_list.h"
 
 #define MAX_BUF 8124
@@ -75,7 +77,7 @@ struct zero_http_return_t {
     int status;
 };
 
-typedef int (*zero_http_header_handler_ptr)(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len);
+typedef int (*zero_http_header_handler_ptr)(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len);
 
 /*
  * 处理头部
@@ -84,20 +86,20 @@ struct zero_http_header_handler_t {
     char *name;
     zero_http_header_handler_ptr handler_ptr;
 };
-extern zero_http_header_handler_t zero_http_header_handlers[];
+extern struct zero_http_header_handler_t zero_http_header_handlers[];
 
 /* 处理首部 */
-void zero_http_handle_header(zero_http_request_t *request, zero_http_return_t *rt);
+void zero_http_handle_header(struct zero_http_request_t *request, struct zero_http_return_t *rt);
 /* 关闭http连接 */
-int zero_http_close_conn(zero_http_request_t *request);
+int zero_http_close_conn(struct zero_http_request_t *request);
 /* 初始化请求报文 */
-int zero_init_request_t(zero_http_request_t *request, int fd, int epfd, zero_http_conf_t *cf);
+int zero_init_request_t(struct zero_http_request_t *request, int fd, int epfd, struct zero_http_conf_t *cf);
 /* 释放请求报文 */
-int zero_free_request_t(zero_http_request_t *request);
+int zero_free_request_t(struct zero_http_request_t *request);
 /* 初始化响应报文 */
-int zero_init_return_t(zero_http_return_t *rt, int fd);
+int zero_init_return_t(struct zero_http_return_t *rt, int fd);
 /* 释放响应报文 */
-int zero_free_return_t(zero_http_return_t *rt);
+int zero_free_return_t(struct zero_http_return_t *rt);
 /* 从HTTP状态码中获得短消息 */
 const char *get_shortmsg_from_status_code(int status_code);
 

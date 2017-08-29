@@ -1,6 +1,7 @@
 #ifndef __HTTP_PARSE_H__
 #define __HTTP_PARSE_H__
 
+#include "http_request.h"
 /* 
  * http协议头的字段，是在请求(request)或响应(respone)行（一条消息的第一行内容）之后传输的
  * 协议头的字段是以明文的字符串格式传输，以冒号分隔的键名与键值对，以回车(CR)加换行(LF)符号序列结尾
@@ -12,8 +13,8 @@
 #define CRLFCRLF '\r\n\r\n'
 
 /* http请求行（响应行） */
-int zero_http_parse_request_line(zero_http_request_t *request);
+int zero_http_parse_request_line(struct zero_http_request_t *request);
 /* http请求首部（响应首部） */
-int zero_http_parse_request_headers(zero_http_request_t *request);
+int zero_http_parse_request_headers(struct zero_http_request_t *request);
 
 #endif

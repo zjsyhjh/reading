@@ -10,7 +10,7 @@ enum {
     line_start = 0,
     line_method,
     line_space_before_uri,
-    line_space_slash_in_uri,
+    line_after_slash_in_uri,
     line_http,
     line_http_h,
     line_http_ht,
@@ -22,9 +22,9 @@ enum {
     line_http_minor_digit,
     line_spaces_after_digit,
     line_almost_done
-} index;
+} line_index;
 
-int zero_http_parse_request_line(zero_http_request_t *request)
+int zero_http_parse_request_line(struct zero_http_request_t *request)
 {
     char ch, *p, *q;
     int pos;
@@ -41,7 +41,7 @@ int zero_http_parse_request_line(zero_http_request_t *request)
                request->request_start = p;
 
                if (ch == CR || ch == LF) break;
-               if ((ich < 'A' || ch > 'Z') && ch != '_') return ZERO_HTTP_REQUEST_INVALID_METHOD; 
+               if ((ch < 'A' || ch > 'Z') && ch != '_') return ZERO_HTTP_REQUEST_INVALID_METHOD; 
 
                 line_index = line_method;
                 break;
@@ -52,17 +52,17 @@ int zero_http_parse_request_line(zero_http_request_t *request)
                     q = request->start;
                     
                     request->method = ZERO_HTTP_METHOD_UNKNOWN;
-                    switch(p - m) {
+                    switch(p - q) {
                         case 3:
-                            if (zero_str_cmp(m, p, "GET")) {
+                            if (zero_str_cmp(q, p, "GET")) {
                                 request->method = ZERO_HTTP_METHOD_GET;
                             }
                             break;
                         case 4:
-                            if (zero_str_cmp(m, p, "HEAD")) {
+                            if (zero_str_cmp(q, p, "HEAD")) {
                                 request->method = ZERO_HTTP_METHOD_HEAD;
                             }
-                            if (zero_str_cmp(m, p, "POST")) {
+                            if (zero_str_cmp(q, p, "POST")) {
                                 request->method = ZERO_HTTP_METHOD_POST;
                             }
                             break;
@@ -83,13 +83,13 @@ int zero_http_parse_request_line(zero_http_request_t *request)
                     case ' ':
                         break;
                     default:
-                        return ZV_HTTP_PARSE_INVALID_REQUEST;
+                        return ZERO_HTTP_REQUEST_INVALID_REQUEST;
                 }
                 break;
             case line_after_slash_in_uri:
                 switch (ch) {
                     case ' ':
-                        r->uri_end = p;
+                        request->uri_end = p;
                         line_index = line_http;
                         break;
                     default:
@@ -254,12 +254,12 @@ enum {
     header_crlfcr
 } header_index;
 
-int zero_http_parse_request_headers(zero_http_request_t *request)
+int zero_http_parse_request_headers(struct zero_http_request_t *request)
 {
     header_index = request->index;
     assert(header_index == 0);
 
-    zero_http_header_t *hd;
+    struct zero_http_header_t *hd;
     void *hd_key_start, *hd_key_end, *hd_value_start, *hd_value_end;
     char ch, *p, *q;
     int pos;
@@ -311,7 +311,7 @@ int zero_http_parse_request_headers(zero_http_request_t *request)
             case header_cr:
                 if (ch == LF) {
                     header_index = header_crlf;
-                    hd = (struct zero_http_header_t *)malloc(sizeof(zero_http_header_t));
+                    hd = (struct zero_http_header_t *)malloc(sizeof(struct zero_http_header_t));
                     hd->key_start = hd_key_start;
                     hd->key_end = hd_key_end;
                     hd->value_start = hd_value_start;

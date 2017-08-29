@@ -10,18 +10,18 @@
 #include "../util/zero_list.h"
 
 /* handle function */
-static int zero_http_process_ignore(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len);
-static int zero_http_process_connection(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len);
-static int zero_http_process_if_modified_since(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len);
+static int zero_http_process_ignore(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len);
+static int zero_http_process_connection(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len);
+static int zero_http_process_if_modified_since(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len);
 
-zero_http_header_handler_t zero_http_header_handlers[] = {
+struct zero_http_header_handler_t zero_http_header_handlers[] = {
     {"Host", zero_http_process_ignore},
     {"Connection", zero_http_process_connection},
     {"If-Modified-Since", zero_http_process_if_modified_since},
     {"", zero_http_process_ignore} 
 };
 
-int zero_init_request_t(zero_http_request_t *request, int fd, int epfd, zero_http_conf_t *cf) {
+int zero_init_request_t(struct zero_http_request_t *request, int fd, int epfd, struct zero_http_conf_t *cf) {
     request->fd = fd;
     request->epfd = epfd;
     request->start = request->end = 0;
@@ -32,7 +32,7 @@ int zero_init_request_t(zero_http_request_t *request, int fd, int epfd, zero_htt
     return ZERO_HTTP_OK; 
 }
 
-int zero_init_return_t(zero_http_return_t *rt, int fd) {
+int zero_init_return_t(struct zero_http_return_t *rt, int fd) {
     rt->fd = fd;
     rt->keep_alive = 0;
     rt->modified = 1;
@@ -41,14 +41,14 @@ int zero_init_return_t(zero_http_return_t *rt, int fd) {
     return ZERO_HTTP_OK;
 }
 
-void zero_http_handle_header(zero_http_request_t *request, zero_http_return_t *rt) {
+void zero_http_handle_header(struct zero_http_request_t *request, struct zero_http_return_t *rt) {
     list_head *pos;
-    zero_http_header_handler_t *header_handler;
+    struct zero_http_header_handler_t *header_handler;
     int len;
 
     list_for_each(pos, &(request->list)) {
         /* 得到pos指向的list所在对象 */
-        zero_http_header_t *hd = list_entry(pos, zero_http_header_t, list);
+        struct zero_http_header_t *hd = list_entry(pos, struct zero_http_header_t, list);
         /* handle */
         for (header_handler = zero_http_header_handlers; strlen(header_handler->name) > 0; header_handler++) {
             if (strncmp(hd->key_start, header_handler->name, hd->key_end - hd->key_start) == 0) {
@@ -63,7 +63,7 @@ void zero_http_handle_header(zero_http_request_t *request, zero_http_return_t *r
     }
 }
 
-int zero_http_close_conn(zero_http_request_t *request) {
+int zero_http_close_conn(struct zero_http_request_t *request) {
     close(request->fd);
     free(request);
     return ZERO_HTTP_OK;
@@ -71,18 +71,18 @@ int zero_http_close_conn(zero_http_request_t *request) {
 
 
 
-static int zero_http_process_ignore(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len) {
+static int zero_http_process_ignore(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len) {
     return ZERO_HTTP_OK;
 }
 
-static int zero_http_process_connection(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len) {
+static int zero_http_process_connection(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len) {
     if (strncasecmp("keep-alive", date, len) == 0) {
         rt->keep_alive = 1;
     }
     return ZERO_HTTP_OK;
 }
 
-static int zero_http_process_if_modified_since(zero_http_request_t *request, zero_http_return_t *rt, char *data, int len) {
+static int zero_http_process_if_modified_since(struct zero_http_request_t *request, struct zero_http_return_t *rt, char *data, int len) {
     struct tm tm;
     if (strptime(data, "%a, %d %b %Y %H:%M:%S GMT", &tm) == (char *)NULL) {
         return ZERO_HTTP_OK;
