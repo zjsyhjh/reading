@@ -44,7 +44,7 @@ struct zero_threadpool_t *threadpool_init(int number_of_threads)
 			log_err("threadpool_init: pthread_create() error");
 			return NULL;
 		}
-		log_info("thread: %08x started", (uint32_t) pool->threads[i]);
+		log_info("thread: %d started", i);
 	}
 	pool->wait_queue = (struct zero_task_t *)malloc(sizeof(struct zero_task_t));
 	if (pool->wait_queue == NULL) {
@@ -124,7 +124,7 @@ static void *zero_thread_main(void *arg)
 		if (pool->shutdown) {
 			break;
 		}
-		zero_task_t *task = pool->wait_queue->next_task;
+		struct zero_task_t *task = pool->wait_queue->next_task;
 		pool->wait_queue->next_task = task->next_task;
 		pool->size_of_wait_queue--;
 		pthread_mutex_unlock(&(pool->m_lock));
@@ -139,9 +139,9 @@ static void *zero_thread_main(void *arg)
 }
 
 
-void threadpool_free(zero_threadpool_t *pool) {
+void threadpool_free(struct zero_threadpool_t *pool) {
 	if (pool->threads) free(pool->threads);
-	zero_task_t *task;
+	struct zero_task_t *task;
 	while(pool->wait_queue->next_task != NULL) {
 		task = pool->wait_queue->next_task;
 		pool->wait_queue->next_task = pool->wait_queue->next_task->next_task;
@@ -155,13 +155,13 @@ void threadpool_destroy(struct zero_threadpool_t *pool) {
 		if (pool->shutdown) break;
 		pool->shutdown = 1;
 		/* 唤醒所有线程 */
-		pthread_cond_broadcast(&(pool->cond));
+		pthread_cond_broadcast(&(pool->m_cond));
 		
 		pthread_mutex_unlock(&(pool->m_lock));
 
 		for (int i = 0; i < pool->number_of_threads; i++) {
 			pthread_join(pool->threads[i], NULL);
-			log_info("thread %08x exit", (uint32_t) pool->threads[i]);
+			log_info("thread %d exit", i);
 		}
 	} while(0);
 

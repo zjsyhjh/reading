@@ -9,7 +9,7 @@ struct zero_threadpool_t {
 	pthread_t *threads;
 	pthread_mutex_t m_lock;
 	pthread_cond_t m_cond;
-	zero_task_t *wait_queue;	
+	struct zero_task_t *wait_queue;	
 
 	int size_of_wait_queue;
 	int number_of_threads;
