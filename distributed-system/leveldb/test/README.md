@@ -16,5 +16,5 @@ cd ~/github.com/leveldb/build && make install
 ##### 3. Compile and run your test program
 
 ```shell
-g++ -std=c++11 -o test test_leveldb.cpp /usr/local/lib/libleveldb.a -lpthreads
+g++ -std=c++11 -o test test_leveldb.cpp /usr/local/lib/libleveldb.a -lpthread
 ```
