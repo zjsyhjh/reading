@@ -59,7 +59,29 @@ func visStruct(
 	}
 }
 
-func Test(t *testing.T) {
+func Test_basic(t *testing.T) {
+	v := reflect.ValueOf(Person{Addr: &Address{Province: "a", City: "b"}})
+
+	// type 和 kind 的区别
+	assert.EqualValues(t, "Person", v.Type().Name())
+	assert.EqualValues(t, reflect.Struct, v.Kind())
+
+	// 通过fieldByName找到filedValue，类型为pointer
+	fieldValue := v.FieldByName("Addr")
+	assert.EqualValues(t, reflect.Ptr, fieldValue.Kind())
+
+	// 取fieldValue指针的值，其类型为"Address"
+	assert.EqualValues(t, "Address", fieldValue.Elem().Type().Name())
+
+	// 通过interface()方法并进行类型检查
+	if i, ok := fieldValue.Interface().(*Address); !ok {
+		t.Fatalf("type check failed")
+	} else {
+		assert.EqualValues(t, "a", i.Province)
+	}
+}
+
+func Test_visStruct(t *testing.T) {
 	p := Person{
 		Name: "andy",
 		Addr: &Address{
@@ -78,10 +100,6 @@ func Test(t *testing.T) {
 	}
 
 	v := reflect.ValueOf(p)
-	assert.EqualValues(t, "main.Person", v.Type().String())
-	assert.EqualValues(t, reflect.Struct, v.Kind())
-	assert.EqualValues(t, reflect.Ptr, v.FieldByName("Addr").Kind())
-
 	visStruct(t, "", v)
 
 	_, ok := v.Interface().(Person)
